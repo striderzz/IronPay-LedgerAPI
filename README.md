@@ -1,4 +1,4 @@
-# Ironbank – Payments Ledger
+# IronPay LedgerAPI
 
 A small UPI-style payments API with a double-entry ledger, idempotent transfers and tests that try to double-spend it.
 
@@ -10,11 +10,11 @@ Status: in development — design spec and build plan; results land as each phas
 
 ## Why this exists
 
-A payments backend has two jobs that are easy to get wrong: never lose or create money, and never apply the same payment twice. Mobile clients retry when the network drops, two requests can debit the same wallet in the same millisecond, and a crash can land between "money moved" and "event sent". Most CRUD tutorials store a `balance` column and update it in place, which fails all three cases. Ironbank is a small API that handles them the way fintech teams do: an append-only double-entry ledger, idempotency keys, row locks, and an outbox table, with tests that attack each guarantee directly.
+A payments backend has two jobs that are easy to get wrong: never lose or create money, and never apply the same payment twice. Mobile clients retry when the network drops, two requests can debit the same wallet in the same millisecond, and a crash can land between "money moved" and "event sent". Most CRUD tutorials store a `balance` column and update it in place, which fails all three cases. IronPay is a small API that handles them the way fintech teams do: an append-only double-entry ledger, idempotency keys, row locks, and an outbox table, with tests that attack each guarantee directly.
 
 ## What it does
 
-- **Accounts and wallets** with UPI-style handles (`hasan@ironbank`), owned by a user, in a single currency (INR, stored as integer paise)
+- **Accounts and wallets** with UPI-style handles (`hasan@ironpay`), owned by a user, in a single currency (INR, stored as integer paise)
 - **Double-entry ledger**: every transfer and deposit writes one debit and one credit entry of the same amount; balances are always computed from entries, never edited
 - **Idempotent transfers**: `POST /transfers` takes an `Idempotency-Key` header; a retry with the same key and body returns the original response, a reused key with a different body is rejected
 - **Concurrency safety**: account rows are locked with `SELECT ... FOR UPDATE` in a fixed order, so parallel transfers cannot overdraw a wallet or deadlock each other
@@ -37,7 +37,7 @@ flowchart LR
     Lock --> PG
     Svc -->|"entries, outbox, audit in one transaction"| PG
     Relay["Outbox relay worker"] -->|"poll with SKIP LOCKED"| PG
-    Relay -->|XADD| Stream[("Redis Stream: ironbank.events")]
+    Relay -->|XADD| Stream[("Redis Stream: ironpay.events")]
     Stream --> Consumers["Downstream consumers"]
     Checker["Ledger invariant checker"] --> PG
 ```
@@ -88,13 +88,13 @@ Unit tests cover pure logic (balance math, request hashing, token bucket refill)
 | Testing | pytest, pytest-cov, httpx | Fixtures for real Postgres and Redis, concurrent tests, coverage report |
 | Load testing | k6 | Arrival-rate scenarios and thresholds on p95 latency and error rate |
 | Packaging | Docker, Docker Compose | One command starts API, worker, Postgres and Redis |
-| Observability | prometheus-fastapi-instrumentator | `/metrics` for request rate, latency and errors; scraped by Prometheus in Endurance and read by Jarvis |
+| Observability | prometheus-fastapi-instrumentator | `/metrics` for request rate, latency and errors; scraped by Prometheus in CloudShip and read by IncidentIQ |
 | Quality and CI | ruff, GitHub Actions | Lint and format checks, tests with service containers, image build |
 
 ## Project structure
 
 ```
-ironbank-payments-ledger/
+ironpay-ledgerapi/
 ├── app/
 │   ├── main.py              # FastAPI app, routers, error handlers
 │   ├── config.py            # settings from environment
@@ -136,8 +136,8 @@ Target workflow once Phase 1 lands.
 **Prerequisites:** Docker with Compose v2, Python 3.11 (for running tests outside Docker), k6 (for load tests), and `make` (on Windows, use Git Bash or run the `docker compose` commands in the Makefile directly).
 
 ```bash
-git clone https://github.com/striderzz/ironbank-payments-ledger.git
-cd ironbank-payments-ledger
+git clone https://github.com/striderzz/ironpay-ledgerapi.git
+cd ironpay-ledgerapi
 cp .env.example .env          # set JWT_SECRET; defaults work for local use
 
 make up                       # docker compose up --build: api, relay, postgres, redis
@@ -160,7 +160,7 @@ curl -X POST http://localhost:8000/transfers \
   -H "Authorization: Bearer $TOKEN" \
   -H "Idempotency-Key: 7d3c2a8e-1b9f-4c51-9a0e-2f6b8d4e5c11" \
   -H "Content-Type: application/json" \
-  -d '{"from_account_id": "<uuid>", "to_handle": "riya@ironbank", "amount_minor": 25000, "note": "dinner"}'
+  -d '{"from_account_id": "<uuid>", "to_handle": "riya@ironpay", "amount_minor": 25000, "note": "dinner"}'
 ```
 
 ## Results
@@ -188,7 +188,7 @@ No numbers yet. Each value is measured after Phase 5; raw output in docs/results
 ## Stretch goals
 
 - **Kafka publishing**: swap the relay's Redis Stream publisher for Kafka (Redpanda in Compose), keyed by account id so events for one account stay ordered
-- **Fraud score before approval**: call [Precog](https://github.com/striderzz/precog-fraud-mlops) for a score before committing a transfer; high scores move the transfer to a `held` state for review, with a short timeout and a rule-based fallback if Precog is down
+- **Fraud score before approval**: call [FraudSight](https://github.com/striderzz/fraudsight-mlops) for a score before committing a transfer; high scores move the transfer to a `held` state for review, with a short timeout and a rule-based fallback if FraudSight is down
 - **Ledger analytics**: export entries to Parquet and build DuckDB + dbt models for daily settlement totals and rejection rates
 - **Reversals**: `POST /transfers/{id}/reversal` that writes compensating entries instead of editing history
 - **Optimistic locking variant**: a version-column implementation behind a flag, benchmarked against `FOR UPDATE` with the same k6 scripts
@@ -196,9 +196,9 @@ No numbers yet. Each value is measured after Phase 5; raw output in docs/results
 
 ## Related projects
 
-- [Endurance – AWS DevOps](https://github.com/striderzz/endurance-aws-devops): deploys Ironbank to AWS
-- [Jarvis – Incident Agents](https://github.com/striderzz/jarvis-incident-agents): investigates incidents injected into Ironbank
-- [Precog – Fraud MLOps](https://github.com/striderzz/precog-fraud-mlops): can score Ironbank transfers for fraud (stretch goal)
+- [CloudShip DevOps](https://github.com/striderzz/cloudship-devops): deploys IronPay to AWS
+- [IncidentIQ AgentOps](https://github.com/striderzz/incidentiq-agentops): investigates incidents injected into IronPay
+- [FraudSight MLOps](https://github.com/striderzz/fraudsight-mlops): can score IronPay transfers for fraud (stretch goal)
 
 ## Author
 

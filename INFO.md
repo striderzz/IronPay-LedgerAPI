@@ -1,4 +1,4 @@
-# Ironbank – Payments Ledger: interview prep
+# IronPay LedgerAPI: interview prep
 
 Companion to [README.md](README.md). Everything here describes the design and the plan. Where an answer needs a measured number, it says `[measured metric]` until a real run produces one.
 
@@ -8,11 +8,11 @@ Companion to [README.md](README.md). Everything here describes the design and th
 
 ### 30-second pitch
 
-I built Ironbank, a small UPI-style payments API in FastAPI and PostgreSQL. It focuses on the three things a payments core has to get right: money is never created or lost, because every transfer writes balanced debit and credit entries in a double-entry ledger; a payment is never applied twice, because transfers take an Idempotency-Key; and parallel requests cannot overdraw a wallet, because account rows are locked with SELECT FOR UPDATE. I prove it with a concurrent double-spend test, a ledger invariant checker and k6 load tests, all running in CI.
+I built IronPay, a small UPI-style payments API in FastAPI and PostgreSQL. It focuses on the three things a payments core has to get right: money is never created or lost, because every transfer writes balanced debit and credit entries in a double-entry ledger; a payment is never applied twice, because transfers take an Idempotency-Key; and parallel requests cannot overdraw a wallet, because account rows are locked with SELECT FOR UPDATE. I prove it with a concurrent double-spend test, a ledger invariant checker and k6 load tests, all running in CI.
 
 ### 2-minute walkthrough
 
-Ironbank has users, wallets with UPI-style handles, and one system funding account. Money enters a wallet through a deposit, which is just a transfer from the funding account, so the total across all accounts always sums to zero.
+IronPay has users, wallets with UPI-style handles, and one system funding account. Money enters a wallet through a deposit, which is just a transfer from the funding account, so the total across all accounts always sums to zero.
 
 When a client calls `POST /transfers`, the request goes through JWT auth and a Redis token bucket rate limiter. Then the transfer service opens a single Postgres transaction. First it inserts the idempotency key with a hash of the request body. If the key already exists with the same body, I return the stored response, so a retry after a timeout never moves money twice. Next I lock both account rows with SELECT FOR UPDATE, always in id order so two opposite transfers cannot deadlock. While holding the lock I compute the sender's balance from ledger entries. If there is enough money, I write the transfer row, one debit entry and one credit entry, an outbox event and an audit row, and store the response against the idempotency key. Then I commit. If anything fails, the whole thing rolls back.
 
@@ -38,7 +38,7 @@ For testing, the key test funds a wallet with 100 rupees and fires 50 concurrent
 | PyJWT + Argon2 | Access tokens and password hashing | Not server sessions: stateless tokens suit an API and multiple replicas. Argon2 not SHA-256: password hashes must be slow and memory-hard |
 | pytest, pytest-cov, httpx | Unit, integration and concurrency tests, coverage | Not unittest: fixtures make real-database tests short. Not mocks for the DB: the guarantees live in Postgres, so tests must hit Postgres |
 | k6 | Load tests with arrival-rate scenarios and thresholds | Not Locust: k6 has open-model executors and pass/fail thresholds built in, and runs as one binary in CI |
-| Docker Compose | Runs API, relay worker, Postgres and Redis locally | Not Kubernetes: one command for a reviewer; Endurance handles cloud deployment |
+| Docker Compose | Runs API, relay worker, Postgres and Redis locally | Not Kubernetes: one command for a reviewer; CloudShip handles cloud deployment |
 | GitHub Actions | Lint, tests with service containers, image build and push | Not Jenkins: free for public repos and lives next to the code |
 | ruff | Lint and format | Not flake8 + black + isort: one fast tool, one config |
 
@@ -276,7 +276,7 @@ stateDiagram-v2
     Reversed --> [*]
 ```
 
-Only `Completed` and `Rejected` are stored transfer statuses in the core. `Held` (Precog) and `Reversed` are stretch goals. In the stretch design, the fraud score is checked after the balance check and before entries are written, so a held transfer has no entries until it is approved.
+Only `Completed` and `Rejected` are stored transfer statuses in the core. `Held` (FraudSight) and `Reversed` are stretch goals. In the stretch design, the fraud score is checked after the balance check and before entries are written, so a held transfer has no entries until it is approved.
 
 ### 6. CI/CD workflow
 
@@ -290,16 +290,16 @@ flowchart LR
     Build --> Main{"main branch?"}
     Main -->|yes| GHCR["push image to GHCR"]
     Main -->|no| Status["status check on the PR"]
-    GHCR --> Endurance["Endurance deploys to AWS"]
+    GHCR --> CloudShip["CloudShip deploys to AWS"]
 ```
 
-CI runs on every push. Only the main branch publishes an image, which the Endurance repo deploys.
+CI runs on every push. Only the main branch publishes an image, which the CloudShip repo deploys.
 
 ### 7. Build plan (plan only, not actual progress)
 
 ```mermaid
 gantt
-    title Ironbank build plan (estimate)
+    title IronPay build plan (estimate)
     dateFormat YYYY-MM-DD
     axisFormat %b %d
     section Core
@@ -319,7 +319,7 @@ About 20 working days. Dates are illustrative; the order matches the build phase
 
 ### Project overview
 
-**1. What is Ironbank in one sentence?**
+**1. What is IronPay in one sentence?**
 A small payments API that moves money between wallets using a double-entry ledger, with idempotent transfers and row locking so retries and concurrent requests cannot create, lose or double-spend money.
 
 **2. Why build a ledger instead of a balance column?**
@@ -361,7 +361,7 @@ Publishing after commit is a dual write: if the process crashes between commit a
 The API is stateless and can run as several replicas behind a load balancer without shared session storage. The downside is that a token cannot be revoked before it expires, so access tokens last 15 minutes. Refresh tokens and a Redis deny list for logout are possible extensions.
 
 **14. Why sync SQLAlchemy instead of async?**
-The work per request is a short database transaction, so the database is the bottleneck, not the Python thread. Sync code with a thread pool is easier to read and debug, and lock behavior is easier to reason about. Async would help with many slow external calls, which matters if the Precog fraud call is added.
+The work per request is a short database transaction, so the database is the bottleneck, not the Python thread. Sync code with a thread pool is easier to read and debug, and lock behavior is easier to reason about. Async would help with many slow external calls, which matters if the FraudSight fraud call is added.
 
 ### Deep dives per tool
 

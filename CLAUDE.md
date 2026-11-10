@@ -1,4 +1,4 @@
-# CLAUDE.md: Ironbank build guide
+# CLAUDE.md: IronPay LedgerAPI build guide
 
 This file tells Claude (Claude Code) how to build this project. Read **README.md** first: it is the design spec. **INFO.md** holds the interview prep and diagrams. This file is the build plan.
 
@@ -14,7 +14,7 @@ Not in core (see Stretch goals): Kafka/Redpanda, fraud scoring, DuckDB/dbt, any 
 
 ## Build order (phases)
 
-1. **Scaffold**: FastAPI app, config from env, PostgreSQL + Alembic, Docker Compose (api, postgres, redis), `/health` and Prometheus `/metrics` (prometheus-fastapi-instrumentator; Endurance and Jarvis scrape it), Makefile, pytest + ruff, GitHub Actions CI (lint + tests with Postgres and Redis service containers).
+1. **Scaffold**: FastAPI app, config from env, PostgreSQL + Alembic, Docker Compose (api, postgres, redis), `/health` and Prometheus `/metrics` (prometheus-fastapi-instrumentator; CloudShip and IncidentIQ scrape it), Makefile, pytest + ruff, GitHub Actions CI (lint + tests with Postgres and Redis service containers).
 2. **Ledger core**: users, accounts with handles, system funding account, deposits, `POST /transfers` writing balanced entries in one transaction, row locks in ascending id order, balances derived from entries, entry history with keyset pagination, `CHECK` constraints. Tests: balance math, opposite-direction transfers (no deadlock), concurrent double-spend test (100 rupees, 50 parallel 10-rupee transfers, exactly 10 succeed). `scripts/check_ledger.py` invariant checker.
 3. **API safety**: JWT auth (register, token, current user), ownership checks on every query, `Idempotency-Key` on transfers and deposits (stored in Postgres in the same transaction, request hash, 24h expiry), Redis token bucket (Lua) per user and per IP on login, `429` with `Retry-After`, RFC 9457 problem details errors. Tests: retry returns the stored response, reused key with a different body returns 422, concurrent same-key requests create one transfer.
 4. **Events and audit**: `outbox_events` written in the transfer transaction, relay worker with `FOR UPDATE SKIP LOCKED` publishing to a Redis Stream, `event_id` for consumer dedup, append-only `audit_log` (trigger blocks UPDATE/DELETE), JSON logs with request id.
@@ -26,11 +26,11 @@ Not in core (see Stretch goals): Kafka/Redpanda, fraud scoring, DuckDB/dbt, any 
 Only after Phase 6 is done and the README results are real:
 
 - Kafka publishing from the outbox (Redpanda in Compose, keyed by account id)
-- Call Precog (`precog-fraud-mlops`) for a fraud score before approving a transfer; `held` state, short timeout, rule-based fallback
+- Call FraudSight (`fraudsight-mlops`) for a fraud score before approving a transfer; `held` state, short timeout, rule-based fallback
 - DuckDB + dbt analytics on ledger exports (daily settlement, rejection rates)
 - Reversals through compensating entries
 - Optimistic locking variant benchmarked against `FOR UPDATE`
-- Opt-in fault toggles (slow queries, Redis outage) for Jarvis incident drills
+- Opt-in fault toggles (slow queries, Redis outage) for IncidentIQ incident drills
 
 ## Working rules for Claude
 
