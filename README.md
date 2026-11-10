@@ -1,4 +1,4 @@
-# Sterling
+# Sterling – Payments Ledger
 
 **A payments API with a double-entry ledger, safe retries, real-time fraud scoring and an analytics layer**
 
@@ -83,7 +83,7 @@ Every AI feature goes through one small provider layer, so you can switch models
 ## Repository structure
 
 ```
-Sterling/
+sterling-payments-ledger/
 ├── requirements.txt
 ├── .env.example
 ├── app/            # FastAPI: routes, ledger, idempotency, fraud scoring
