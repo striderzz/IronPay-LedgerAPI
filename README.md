@@ -1,4 +1,4 @@
-# Sterling – Payments Ledger
+# Ironbank – Payments Ledger
 
 **A payments API with a double-entry ledger, safe retries, real-time fraud scoring and an analytics layer**
 
@@ -10,7 +10,7 @@ FastAPI · PostgreSQL · Redis · Redpanda (Kafka) · XGBoost · MLflow · DuckD
 
 ## Overview
 
-Sterling is a small UPI-style payments service built the way fintech teams build the core of theirs:
+Ironbank is a small UPI-style payments service built the way fintech teams build the core of theirs:
 
 - **Every rupee is tracked** in a double-entry ledger, so every transfer creates balanced debit and credit entries.
 - **A payment is never applied twice**, even if the client retries after a timeout (idempotency keys + database transactions).
@@ -83,7 +83,7 @@ Every AI feature goes through one small provider layer, so you can switch models
 ## Repository structure
 
 ```
-sterling-payments-ledger/
+ironbank-payments-ledger/
 ├── requirements.txt
 ├── .env.example
 ├── app/            # FastAPI: routes, ledger, idempotency, fraud scoring
