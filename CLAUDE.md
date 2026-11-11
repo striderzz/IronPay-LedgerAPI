@@ -26,7 +26,7 @@ Not in core (see Stretch goals): Kafka/Redpanda, fraud scoring, DuckDB/dbt, any 
 Only after Phase 6 is done and the README results are real:
 
 - Kafka publishing from the outbox (Redpanda in Compose, keyed by account id)
-- Call FraudSight (`fraudsight-mlops`) for a fraud score before approving a transfer; `held` state, short timeout, rule-based fallback
+- Call FraudSight (`FraudSight-MLOps`) for a fraud score before approving a transfer; `held` state, short timeout, rule-based fallback
 - DuckDB + dbt analytics on ledger exports (daily settlement, rejection rates)
 - Reversals through compensating entries
 - Optimistic locking variant benchmarked against `FOR UPDATE`

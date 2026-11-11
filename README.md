@@ -94,7 +94,7 @@ Unit tests cover pure logic (balance math, request hashing, token bucket refill)
 ## Project structure
 
 ```
-ironpay-ledgerapi/
+IronPay-LedgerAPI/
 ├── app/
 │   ├── main.py              # FastAPI app, routers, error handlers
 │   ├── config.py            # settings from environment
@@ -136,8 +136,8 @@ Target workflow once Phase 1 lands.
 **Prerequisites:** Docker with Compose v2, Python 3.11 (for running tests outside Docker), k6 (for load tests), and `make` (on Windows, use Git Bash or run the `docker compose` commands in the Makefile directly).
 
 ```bash
-git clone https://github.com/striderzz/ironpay-ledgerapi.git
-cd ironpay-ledgerapi
+git clone https://github.com/striderzz/IronPay-LedgerAPI.git
+cd IronPay-LedgerAPI
 cp .env.example .env          # set JWT_SECRET; defaults work for local use
 
 make up                       # docker compose up --build: api, relay, postgres, redis
@@ -188,7 +188,7 @@ No numbers yet. Each value is measured after Phase 5; raw output in docs/results
 ## Stretch goals
 
 - **Kafka publishing**: swap the relay's Redis Stream publisher for Kafka (Redpanda in Compose), keyed by account id so events for one account stay ordered
-- **Fraud score before approval**: call [FraudSight](https://github.com/striderzz/fraudsight-mlops) for a score before committing a transfer; high scores move the transfer to a `held` state for review, with a short timeout and a rule-based fallback if FraudSight is down
+- **Fraud score before approval**: call [FraudSight](https://github.com/striderzz/FraudSight-MLOps) for a score before committing a transfer; high scores move the transfer to a `held` state for review, with a short timeout and a rule-based fallback if FraudSight is down
 - **Ledger analytics**: export entries to Parquet and build DuckDB + dbt models for daily settlement totals and rejection rates
 - **Reversals**: `POST /transfers/{id}/reversal` that writes compensating entries instead of editing history
 - **Optimistic locking variant**: a version-column implementation behind a flag, benchmarked against `FOR UPDATE` with the same k6 scripts
@@ -196,9 +196,9 @@ No numbers yet. Each value is measured after Phase 5; raw output in docs/results
 
 ## Related projects
 
-- [CloudShip DevOps](https://github.com/striderzz/cloudship-devops): deploys IronPay to AWS
-- [IncidentIQ AgentOps](https://github.com/striderzz/incidentiq-agentops): investigates incidents injected into IronPay
-- [FraudSight MLOps](https://github.com/striderzz/fraudsight-mlops): can score IronPay transfers for fraud (stretch goal)
+- [CloudShip DevOps](https://github.com/striderzz/CloudShip-DevOps): deploys IronPay to AWS
+- [IncidentIQ AgentOps](https://github.com/striderzz/IncidentIQ-AgentOps): investigates incidents injected into IronPay
+- [FraudSight MLOps](https://github.com/striderzz/FraudSight-MLOps): can score IronPay transfers for fraud (stretch goal)
 
 ## Author
 
