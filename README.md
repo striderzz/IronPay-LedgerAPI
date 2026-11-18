@@ -178,8 +178,8 @@ No numbers yet. Each value is measured after Phase 5; raw output in docs/results
 
 ## Roadmap
 
-- [ ] Phase 1: scaffold (FastAPI app, config, PostgreSQL + Alembic, Docker Compose, health check, Prometheus `/metrics`, pytest, ruff, GitHub Actions CI)
-- [ ] Phase 2: ledger core (users, accounts and handles, deposits, double-entry transfers with row locks, derived balances, entry history, double-spend test, invariant checker)
+- [x] Phase 1: scaffold (FastAPI app, config, PostgreSQL + Alembic, Docker Compose, health check, Prometheus `/metrics`, pytest, ruff, GitHub Actions CI)
+- [x] Phase 2: ledger core (users, accounts and handles, deposits, double-entry transfers with row locks, derived balances, entry history, double-spend test, invariant checker)
 - [ ] Phase 3: API safety (JWT auth and ownership checks, Idempotency-Key on transfers and deposits, Redis rate limiting, problem details errors)
 - [ ] Phase 4: events and audit (outbox table, relay worker to Redis Stream, append-only audit log, JSON logs with request id)
 - [ ] Phase 5: load and results (k6 scenarios, invariant check after load, coverage, numbers in README from docs/results/)
