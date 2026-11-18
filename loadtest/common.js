@@ -6,9 +6,12 @@ export const BASE = __ENV.BASE_URL || 'http://localhost:8000';
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
 let counter = 0;
+// Unique per logical request. __VU and __ITER do not exist during setup(), hence the guards.
 export function newKey() {
   counter += 1;
-  return `k6-${__VU}-${__ITER}-${counter}-${Date.now()}-${Math.floor(Math.random() * 1e9)}`;
+  const vu = typeof __VU !== 'undefined' ? __VU : 0;
+  const iter = typeof __ITER !== 'undefined' ? __ITER : 0;
+  return `k6-${vu}-${iter}-${counter}-${Date.now()}-${Math.floor(Math.random() * 1e9)}`;
 }
 
 // Register, log in, open a wallet and fund it, for `n` users. Runs once in setup().
