@@ -16,6 +16,17 @@ class RegisterIn(BaseModel):
     password: str = Field(min_length=8, max_length=128)
 
 
+class LoginIn(BaseModel):
+    email: str = Field(max_length=254)
+    password: str = Field(max_length=128)
+
+
+class TokenOut(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    expires_in: int = Field(description="Seconds until the token expires")
+
+
 class UserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -24,7 +35,6 @@ class UserOut(BaseModel):
 
 
 class AccountCreate(BaseModel):
-    user_id: uuid.UUID
     handle: str = Field(pattern=HANDLE_PATTERN, examples=["asha@ironpay"])
 
 

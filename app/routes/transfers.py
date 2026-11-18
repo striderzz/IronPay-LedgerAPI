@@ -1,56 +1,125 @@
-"""Deposits and transfers. Each request is one database transaction."""
+"""Deposits and transfers.
+
+Each request is one database transaction that holds the idempotency key, the account
+row locks, the transfer and its ledger entries. A retry with the same Idempotency-Key
+replays the stored response instead of moving money again.
+"""
 
 import uuid
+from collections.abc import Callable
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Header, Request, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.db import get_session
-from app.models import Account, Transfer
+from app.deps import current_user, money_rate_limit
+from app.models import Account, Transfer, User
+from app.problems import PROBLEM_JSON, ProblemError
+from app.routes.accounts import owned_account
 from app.schemas import DepositIn, TransferIn, TransferOut
-from app.services import ledger
+from app.services import idempotency, ledger
 
 router = APIRouter(tags=["transfers"])
 
+IdempotencyKey = Header(
+    alias="Idempotency-Key",
+    min_length=1,
+    max_length=255,
+    description="Unique per logical request (a UUID works). Retries must reuse it.",
+)
 
-def _respond(transfer: Transfer) -> JSONResponse:
-    """201 for a completed transfer; 422 for a rejected one (it is still recorded)."""
-    code = status.HTTP_201_CREATED if transfer.status == "completed" else 422
+REJECTION_TITLES = {
+    "insufficient_funds": "Insufficient funds",
+    "account_frozen": "Account frozen",
+}
+
+
+def _render(transfer: Transfer) -> tuple[int, dict, str]:
+    """201 with the transfer, or a 422 problem that still carries the recorded transfer."""
     body = jsonable_encoder(TransferOut.model_validate(transfer))
-    return JSONResponse(body, status_code=code)
+    if transfer.status == "completed":
+        return 201, body, "application/json"
+    reason = transfer.reject_reason or "rejected"
+    problem = {
+        "type": f"/problems/{reason.replace('_', '-')}",
+        "title": REJECTION_TITLES.get(reason, "Transfer rejected"),
+        "status": 422,
+        "detail": f"transfer {transfer.id} was rejected: {reason}",
+        "transfer": body,
+    }
+    return 422, problem, PROBLEM_JSON
 
 
-def _post(session: Session, **kwargs) -> JSONResponse:
+def _idempotent(
+    request: Request,
+    session: Session,
+    user: User,
+    key: str,
+    body: dict,
+    action: Callable[[], Transfer],
+) -> JSONResponse:
+    req_hash = idempotency.request_hash(request.method, request.url.path, body)
     try:
-        transfer = ledger.post_transfer(session, **kwargs)
-        session.commit()
-    except ledger.AccountNotFound:
+        stored = idempotency.begin(session, user.id, key, req_hash)
+    except idempotency.KeyReused:
         session.rollback()
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "account not found") from None
+        raise ProblemError(
+            422,
+            "this Idempotency-Key was already used with a different request body",
+            title="Idempotency key reused",
+            type_="/problems/idempotency-key-reused",
+        ) from None
+    if stored is not None:
+        session.commit()
+        media = PROBLEM_JSON if stored.status >= 400 else "application/json"
+        return JSONResponse(
+            stored.body,
+            status_code=stored.status,
+            media_type=media,
+            headers={"Idempotent-Replayed": "true"},
+        )
+
+    try:
+        transfer = action()
+    except ledger.AccountNotFound:
+        session.rollback()  # also releases the key, so a corrected retry can use it
+        raise ProblemError(404, "account not found") from None
     except ledger.InvalidTransfer as exc:
         session.rollback()
-        raise HTTPException(422, str(exc)) from None
-    session.refresh(transfer)
-    return _respond(transfer)
+        raise ProblemError(422, str(exc)) from None
+
+    session.refresh(transfer)  # load server defaults such as created_at
+    code, payload, media = _render(transfer)
+    idempotency.finish(session, user.id, key, code, payload)
+    session.commit()
+    return JSONResponse(payload, status_code=code, media_type=media)
 
 
 @router.post(
     "/deposits",
     response_model=TransferOut,
     status_code=status.HTTP_201_CREATED,
-    responses={404: {"description": "Account not found"}},
+    responses={404: {"description": "Wallet not found"}, 429: {"description": "Rate limited"}},
 )
-def create_deposit(body: DepositIn, session: Session = Depends(get_session)) -> JSONResponse:
-    """Move money from the system funding account into a wallet."""
-    return _post(
+def create_deposit(
+    body: DepositIn,
+    request: Request,
+    idempotency_key: str = IdempotencyKey,
+    session: Session = Depends(get_session),
+    user: User = Depends(money_rate_limit),
+) -> JSONResponse:
+    """Move money from the system funding account into one of your wallets."""
+    wallet = owned_account(session, body.to_account_id, user)
+    return _idempotent(
+        request,
         session,
-        from_account_id=ledger.funding_account(session).id,
-        to_account_id=body.to_account_id,
-        amount_minor=body.amount_minor,
-        kind="deposit",
+        user,
+        idempotency_key,
+        body.model_dump(mode="json"),
+        lambda: ledger.deposit(session, to_account_id=wallet.id, amount_minor=body.amount_minor),
     )
 
 
@@ -58,26 +127,55 @@ def create_deposit(body: DepositIn, session: Session = Depends(get_session)) -> 
     "/transfers",
     response_model=TransferOut,
     status_code=status.HTTP_201_CREATED,
-    responses={422: {"description": "Rejected (for example insufficient funds)"}},
+    responses={
+        404: {"description": "Wallet or receiver handle not found"},
+        422: {"description": "Rejected (insufficient funds, frozen account, key reused)"},
+        429: {"description": "Rate limited"},
+    },
 )
-def create_transfer(body: TransferIn, session: Session = Depends(get_session)) -> JSONResponse:
+def create_transfer(
+    body: TransferIn,
+    request: Request,
+    idempotency_key: str = IdempotencyKey,
+    session: Session = Depends(get_session),
+    user: User = Depends(money_rate_limit),
+) -> JSONResponse:
+    sender = owned_account(session, body.from_account_id, user)
     receiver = session.execute(
-        select(Account).where(Account.handle == body.to_handle)
+        select(Account).where(Account.handle == body.to_handle, Account.kind == "wallet")
     ).scalar_one_or_none()
     if receiver is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "receiver handle not found")
-    return _post(
+        raise ProblemError(404, "receiver handle not found")
+    return _idempotent(
+        request,
         session,
-        from_account_id=body.from_account_id,
-        to_account_id=receiver.id,
-        amount_minor=body.amount_minor,
-        note=body.note,
+        user,
+        idempotency_key,
+        body.model_dump(mode="json"),
+        lambda: ledger.post_transfer(
+            session,
+            from_account_id=sender.id,
+            to_account_id=receiver.id,
+            amount_minor=body.amount_minor,
+            note=body.note,
+        ),
     )
 
 
 @router.get("/transfers/{transfer_id}", response_model=TransferOut)
-def get_transfer(transfer_id: uuid.UUID, session: Session = Depends(get_session)) -> Transfer:
-    transfer = session.get(Transfer, transfer_id)
+def get_transfer(
+    transfer_id: uuid.UUID,
+    session: Session = Depends(get_session),
+    user: User = Depends(current_user),
+) -> Transfer:
+    """Visible to the owner of either side of the transfer."""
+    mine = select(Account.id).where(Account.user_id == user.id)
+    transfer = session.execute(
+        select(Transfer).where(
+            Transfer.id == transfer_id,
+            or_(Transfer.from_account_id.in_(mine), Transfer.to_account_id.in_(mine)),
+        )
+    ).scalar_one_or_none()
     if transfer is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "transfer not found")
+        raise ProblemError(404, "transfer not found")
     return transfer

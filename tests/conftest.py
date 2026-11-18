@@ -43,9 +43,11 @@ def clean_db(services) -> None:
     """Empty every table except the system funding account. TRUNCATE does not fire the
     append-only row triggers, so tests can reset the ledger between runs."""
     with engine.begin() as conn:
-        conn.execute(text("TRUNCATE ledger_entries, transfers"))
+        conn.execute(text("TRUNCATE ledger_entries, transfers, idempotency_keys"))
         conn.execute(text("DELETE FROM accounts WHERE kind = 'wallet'"))
         conn.execute(text("DELETE FROM users"))
+    for key in redis_client.scan_iter("rl:*"):
+        redis_client.delete(key)
 
 
 @pytest.fixture
@@ -92,3 +94,39 @@ def client(clean_db):
 
     with TestClient(app) as c:
         yield c
+
+
+class ApiUser:
+    """A registered, logged-in user driving the API through the test client."""
+
+    def __init__(self, client, name: str) -> None:
+        self.client = client
+        self.name = name
+        email, password = f"{name}@example.com", "pass-1234-word"
+        r = client.post("/auth/register", json={"email": email, "password": password})
+        assert r.status_code == 201, r.text
+        self.user_id = r.json()["id"]
+        r = client.post("/auth/token", json={"email": email, "password": password})
+        assert r.status_code == 200, r.text
+        self.headers = {"Authorization": f"Bearer {r.json()['access_token']}"}
+
+    def wallet(self, handle: str | None = None) -> str:
+        r = self.client.post(
+            "/accounts", json={"handle": handle or f"{self.name}@ironpay"}, headers=self.headers
+        )
+        assert r.status_code == 201, r.text
+        return r.json()["id"]
+
+    def post(self, path: str, body: dict, key: str | None = None):
+        import uuid
+
+        headers = {**self.headers, "Idempotency-Key": key or str(uuid.uuid4())}
+        return self.client.post(path, json=body, headers=headers)
+
+    def get(self, path: str, **kwargs):
+        return self.client.get(path, headers=self.headers, **kwargs)
+
+
+@pytest.fixture
+def api_user(client):
+    return lambda name: ApiUser(client, name)

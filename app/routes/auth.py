@@ -1,13 +1,18 @@
-"""User registration. Tokens and login arrive with JWT auth in Phase 3."""
+"""Registration, login (JWT access tokens) and the current user."""
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Request, status
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.db import get_session
+from app.deps import current_user
 from app.models import User
-from app.schemas import RegisterIn, UserOut
-from app.security import hash_password
+from app.problems import ProblemError
+from app.ratelimit import enforce
+from app.schemas import LoginIn, RegisterIn, TokenOut, UserOut
+from app.security import create_access_token, hash_password, verify_password
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -20,5 +25,29 @@ def register(body: RegisterIn, session: Session = Depends(get_session)) -> User:
         session.commit()
     except IntegrityError:
         session.rollback()
-        raise HTTPException(status.HTTP_409_CONFLICT, "email already registered") from None
+        raise ProblemError(409, "email already registered") from None
+    return user
+
+
+@router.post("/token", response_model=TokenOut)
+def token(body: LoginIn, request: Request, session: Session = Depends(get_session)) -> TokenOut:
+    """Exchange email and password for a short-lived access token.
+    Rate limited per client IP to slow down password guessing."""
+    s = get_settings()
+    client_ip = request.client.host if request.client else "unknown"
+    enforce("login", client_ip, rate=s.login_rate_per_sec, burst=s.login_burst)
+
+    user = session.execute(
+        select(User).where(User.email == body.email.lower())
+    ).scalar_one_or_none()
+    if not verify_password(body.password, user.password_hash if user else None):
+        raise ProblemError(401, "wrong email or password", headers={"WWW-Authenticate": "Bearer"})
+    return TokenOut(
+        access_token=create_access_token(user.id),
+        expires_in=s.access_token_minutes * 60,
+    )
+
+
+@router.get("/me", response_model=UserOut)
+def me(user: User = Depends(current_user)) -> User:
     return user
