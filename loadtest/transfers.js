@@ -41,5 +41,8 @@ export default function (data) {
 }
 
 export function handleSummary(data) {
-  return { [__ENV.OUT || 'summary.json']: JSON.stringify(data, null, 2) };
+  // Record the scenario's own rate and duration: k6's built-in rates are averaged over
+  // the whole run including setup(), which would understate throughput.
+  const run = { target_rps: RATE, duration_s: parseInt(DURATION, 10), users: USERS };
+  return { [__ENV.OUT || 'summary.json']: JSON.stringify({ ...data, run }, null, 2) };
 }

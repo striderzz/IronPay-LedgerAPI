@@ -1,9 +1,13 @@
 """Turn the raw k6 summaries in a results folder into summary.json and summary.md.
 
+Achieved throughput = transfer requests / scenario duration (k6's own `rate` averages
+over the whole run including setup, so it is not used).
 Max transfers/sec = the highest step rate whose achieved throughput is at least 95% of
 the target, with transfer error rate under 1% and p95 under P95_LIMIT_MS.
 
-Usage: python -m scripts.summarize_load docs/results/load-<date>
+Usage:
+  python -m scripts.summarize_load <results folder>
+  python -m scripts.summarize_load --check <k6 step json>   # exit 1 if the step failed
 """
 
 import json
@@ -23,16 +27,30 @@ def transfer_stats(path: Path) -> dict:
     failed = _metric(s, "http_req_failed{name:transfer}")
     reqs = _metric(s, "http_reqs{name:transfer}") or {}
     checks = _metric(s, "checks")
+    run = s.get("run", {})
+    count = int(reqs.get("count", 0))
+    duration_s = run.get("duration_s") or 0
     return {
+        "target_rps": run.get("target_rps"),
+        "duration_s": duration_s,
         "p50_ms": round(dur.get("med", 0), 2),
         "p95_ms": round(dur.get("p(95)", 0), 2),
         "p99_ms": round(dur.get("p(99)", 0), 2),
         "error_rate": round(failed.get("rate", 0), 4),
-        "achieved_rps": round(reqs.get("rate", 0), 1),
-        "requests": int(reqs.get("count", 0)),
+        "achieved_rps": round(count / duration_s, 1) if duration_s else None,
+        "requests": count,
         "dropped_iterations": int(_metric(s, "dropped_iterations").get("count", 0)),
         "checks_pass_rate": round(checks.get("rate", 0), 4),
     }
+
+
+def step_ok(st: dict, target: int) -> bool:
+    return (
+        st["achieved_rps"] is not None
+        and st["achieved_rps"] >= 0.95 * target
+        and st["error_rate"] < 0.01
+        and st["p95_ms"] < P95_LIMIT_MS
+    )
 
 
 def main(folder: str) -> None:
@@ -45,11 +63,7 @@ def main(folder: str) -> None:
     for f in sorted(root.glob("k6_step_*.json"), key=lambda p: int(p.stem.split("_")[-1])):
         target = int(f.stem.split("_")[-1])
         st = transfer_stats(f) | {"target_rps": target}
-        st["ok"] = (
-            st["achieved_rps"] >= 0.95 * target
-            and st["error_rate"] < 0.01
-            and st["p95_ms"] < P95_LIMIT_MS
-        )
+        st["ok"] = step_ok(st, target)
         steps.append(st)
     out["steps"] = steps
     passing = [s for s in steps if s["ok"]]
@@ -93,4 +107,10 @@ def main(folder: str) -> None:
 
 
 if __name__ == "__main__":
+    if sys.argv[1] == "--check":
+        path = Path(sys.argv[2])
+        st = transfer_stats(path)
+        ok = step_ok(st, st["target_rps"] or int(path.stem.split("_")[-1]))
+        print(json.dumps(st | {"ok": ok}))
+        sys.exit(0 if ok else 1)
     main(sys.argv[1])

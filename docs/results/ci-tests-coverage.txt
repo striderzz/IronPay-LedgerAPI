@@ -1,0 +1,60 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.16, pytest-8.3.4, pluggy-1.7.0
+rootdir: /home/runner/work/IronPay-LedgerAPI/IronPay-LedgerAPI
+configfile: pyproject.toml
+testpaths: tests
+plugins: cov-6.0.0, anyio-4.16.0
+collected 51 items
+
+tests/integration/test_api.py ....                                       [  7%]
+tests/integration/test_audit.py ....                                     [ 15%]
+tests/integration/test_auth.py .......                                   [ 29%]
+tests/integration/test_concurrency.py ..                                 [ 33%]
+tests/integration/test_health.py ..                                      [ 37%]
+tests/integration/test_idempotency.py ......                             [ 49%]
+tests/integration/test_ledger.py ..........                              [ 68%]
+tests/integration/test_outbox.py .....                                   [ 78%]
+tests/integration/test_ratelimit.py ....                                 [ 86%]
+tests/unit/test_config.py .                                              [ 88%]
+tests/unit/test_logging.py .                                             [ 90%]
+tests/unit/test_security.py .....                                        [100%]
+
+=============================== warnings summary ===============================
+tests/integration/test_api.py::test_full_transfer_flow
+  /opt/hostedtoolcache/Python/3.12.16/x64/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+
+---------- coverage: platform linux, python 3.12.16-final-0 ----------
+Name                          Stmts   Miss  Cover   Missing
+-----------------------------------------------------------
+app/__init__.py                   0      0   100%
+app/config.py                    19      0   100%
+app/db.py                        10      0   100%
+app/deps.py                      26      1    96%   30
+app/logging_setup.py             38      1    97%   30
+app/main.py                      21      0   100%
+app/models.py                    42      0   100%
+app/problems.py                  36      1    97%   71
+app/ratelimit.py                 19      0   100%
+app/redis_client.py               3      0   100%
+app/request_context.py            3      0   100%
+app/routes/__init__.py            0      0   100%
+app/routes/accounts.py           50      0   100%
+app/routes/auth.py               42      0   100%
+app/routes/health.py             24      4    83%   24-25, 29-30
+app/routes/transfers.py          67      7    90%   87-92, 192
+app/schemas.py                   58      0   100%
+app/security.py                  30      1    97%   53
+app/services/__init__.py          0      0   100%
+app/services/audit.py             8      0   100%
+app/services/checker.py           9      0   100%
+app/services/idempotency.py      29      2    93%   65-72
+app/services/ledger.py           46      1    98%   59
+app/services/outbox.py            8      0   100%
+-----------------------------------------------------------
+TOTAL                           588     18    97%
+Coverage XML written to file coverage.xml
+
+======================== 51 passed, 1 warning in 11.01s ========================

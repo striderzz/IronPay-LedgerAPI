@@ -7,7 +7,7 @@ on:
     inputs:
       steps:
         description: "Arrival rates (transfers/sec) for the step test"
-        default: "50 100 200 300 400 600 800"
+        default: "100 120 140 160 180 200 250"
 
 jobs:
   load:
@@ -65,11 +65,6 @@ jobs:
         run: |
           RATE=100 DURATION=60s USERS=200 OUT=$RESULTS/k6_constant.json k6 run --quiet loadtest/transfers.js
           python -m scripts.check_ledger > $RESULTS/ledger_after_constant.json
-      - name: Step test (max throughput)
-        run: |
-          for r in ${{ inputs.steps }}; do
-            RATE=$r DURATION=30s USERS=200 OUT=$RESULTS/k6_step_$r.json k6 run --quiet loadtest/transfers.js || true
-          done
       - name: Retry storm (duplicates)
         run: |
           before=$(python -m scripts.count_transfers)
@@ -86,6 +81,17 @@ jobs:
                      "duplicate_transfers": created - keys},
                     open(os.environ["RESULTS"] + "/storm.json", "w"), indent=2)
           EOF
+      - name: Step test (max throughput)
+        # Stops at the first rate that misses the criteria; overload past that point only
+        # builds a backlog that slows the next run. 20 s cool-down between steps.
+        run: |
+          for r in ${{ inputs.steps }}; do
+            RATE=$r DURATION=30s USERS=200 OUT=$RESULTS/k6_step_$r.json k6 run --quiet loadtest/transfers.js || true
+            if ! python -m scripts.summarize_load --check $RESULTS/k6_step_$r.json; then
+              echo "rate $r missed the criteria; stopping"; break
+            fi
+            sleep 20
+          done
       - name: Final ledger check
         run: python -m scripts.check_ledger | tee $RESULTS/ledger_final.json
       - name: Summarize
