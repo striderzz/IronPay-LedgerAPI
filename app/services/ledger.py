@@ -95,6 +95,9 @@ def post_transfer(
         note=note,
     )
     session.add(transfer)
+    # Insert the transfer row first: there is no ORM relationship between transfers and
+    # entries, so the unit of work would not otherwise order the two INSERTs for the FK.
+    session.flush()
     if reason is None:
         session.add_all(
             [
