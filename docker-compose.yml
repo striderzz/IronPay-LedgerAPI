@@ -40,5 +40,18 @@ services:
       redis:
         condition: service_healthy
 
+  relay:
+    build: .
+    environment:
+      DATABASE_URL: postgresql+psycopg://ironpay:ironpay@postgres:5432/ironpay
+      REDIS_URL: redis://redis:6379/0
+    command: python -m worker.outbox_relay
+    depends_on:
+      api:
+        condition: service_started
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   pgdata:

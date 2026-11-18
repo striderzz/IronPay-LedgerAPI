@@ -20,7 +20,7 @@ from app.models import Account, Transfer, User
 from app.problems import PROBLEM_JSON, ProblemError
 from app.routes.accounts import owned_account
 from app.schemas import DepositIn, TransferIn, TransferOut
-from app.services import idempotency, ledger
+from app.services import audit, idempotency, ledger
 
 router = APIRouter(tags=["transfers"])
 
@@ -94,6 +94,18 @@ def _idempotent(
     session.refresh(transfer)  # load server defaults such as created_at
     code, payload, media = _render(transfer)
     idempotency.finish(session, user.id, key, code, payload)
+    audit.record(
+        session,
+        actor_id=user.id,
+        action=f"{transfer.kind}.create",
+        entity_type="transfer",
+        entity_id=str(transfer.id),
+        details={
+            "status": transfer.status,
+            "amount_minor": transfer.amount_minor,
+            "reject_reason": transfer.reject_reason,
+        },
+    )
     session.commit()
     return JSONResponse(payload, status_code=code, media_type=media)
 

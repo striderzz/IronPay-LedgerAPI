@@ -13,6 +13,7 @@ from app.deps import current_user
 from app.models import Account, LedgerEntry, User
 from app.problems import ProblemError
 from app.schemas import AccountCreate, AccountOut, EntriesPage, EntryOut
+from app.services import audit
 from app.services.ledger import balance
 
 router = APIRouter(prefix="/accounts", tags=["accounts"])
@@ -47,10 +48,19 @@ def create_account(
     account = Account(id=uuid.uuid4(), user_id=user.id, handle=body.handle, kind="wallet")
     session.add(account)
     try:
-        session.commit()
+        session.flush()
     except IntegrityError:
         session.rollback()
         raise ProblemError(409, "handle already taken") from None
+    audit.record(
+        session,
+        actor_id=user.id,
+        action="account.create",
+        entity_type="account",
+        entity_id=str(account.id),
+        details={"handle": account.handle},
+    )
+    session.commit()
     session.refresh(account)
     return _out(session, account)
 

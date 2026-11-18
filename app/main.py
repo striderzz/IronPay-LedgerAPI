@@ -7,16 +7,19 @@ from prometheus_fastapi_instrumentator import Instrumentator
 
 from app import problems
 from app.config import get_settings
+from app.logging_setup import RequestContextMiddleware, configure_logging
 from app.routes import accounts, auth, health, transfers
 
+configure_logging(get_settings().log_level)
 log = logging.getLogger(__name__)
 
 app = FastAPI(
     title="IronPay LedgerAPI",
-    version="0.3.0",
+    version="0.4.0",
     description="UPI-style payments API with a double-entry ledger in PostgreSQL.",
 )
 problems.install(app)
+app.add_middleware(RequestContextMiddleware)
 app.include_router(health.router)
 app.include_router(auth.router)
 app.include_router(accounts.router)

@@ -17,6 +17,7 @@ from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
 from app.models import SYSTEM_FUNDING_HANDLE, Account, LedgerEntry, Transfer
+from app.services import outbox
 
 
 class LedgerError(Exception):
@@ -115,6 +116,22 @@ def post_transfer(
                 ),
             ]
         )
+    # The event is written in the same transaction, so a committed transfer always has
+    # its event and a rolled-back one never does (transactional outbox).
+    outbox.add(
+        session,
+        event_type=f"{kind}.{transfer.status}",
+        aggregate_id=transfer.id,
+        payload={
+            "transfer_id": str(transfer.id),
+            "from_account_id": str(sender.id),
+            "to_account_id": str(receiver.id),
+            "amount_minor": amount_minor,
+            "kind": kind,
+            "status": transfer.status,
+            "reject_reason": reason,
+        },
+    )
     session.flush()
     return transfer
 

@@ -43,11 +43,14 @@ def clean_db(services) -> None:
     """Empty every table except the system funding account. TRUNCATE does not fire the
     append-only row triggers, so tests can reset the ledger between runs."""
     with engine.begin() as conn:
-        conn.execute(text("TRUNCATE ledger_entries, transfers, idempotency_keys"))
+        conn.execute(
+            text("TRUNCATE ledger_entries, transfers, idempotency_keys, outbox_events, audit_log")
+        )
         conn.execute(text("DELETE FROM accounts WHERE kind = 'wallet'"))
         conn.execute(text("DELETE FROM users"))
     for key in redis_client.scan_iter("rl:*"):
         redis_client.delete(key)
+    redis_client.delete("ironpay.events", "test.events")
 
 
 @pytest.fixture

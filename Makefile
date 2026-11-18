@@ -1,4 +1,4 @@
-.PHONY: up down logs migrate seed check-ledger lint fmt test
+.PHONY: up down logs events migrate seed check-ledger lint fmt test
 
 up:            ## start api, postgres and redis
 	docker compose up --build -d
@@ -7,7 +7,10 @@ down:
 	docker compose down
 
 logs:
-	docker compose logs -f api
+	docker compose logs -f api relay
+
+events:        ## last 10 events on the Redis Stream
+	docker compose exec redis redis-cli XREVRANGE ironpay.events + - COUNT 10
 
 migrate:       ## apply migrations inside the api container
 	docker compose exec api alembic upgrade head
