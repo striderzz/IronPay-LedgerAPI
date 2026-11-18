@@ -1,6 +1,6 @@
 # CLAUDE.md: IronPay LedgerAPI build guide
 
-This file tells Claude (Claude Code) how to build this project. Read **README.md** first: it is the design spec. **INFO.md** holds the interview prep and diagrams. This file is the build plan.
+This file tells Claude (Claude Code) how to build this project. Read **README.md** first: it is the design spec. **INFO.md** holds the overview, system design and workflow diagrams; **INTERVIEW.md** holds the interview Q&A. This file is the build plan.
 
 ## Goal
 
@@ -56,4 +56,4 @@ Only after Phase 6 is done and the README results are real:
 
 ## Status
 
-Only `README.md`, `INFO.md` and this file exist so far. Start at **Phase 1**.
+Only `README.md`, `INFO.md`, `INTERVIEW.md` and this file exist so far. Start at **Phase 1**.

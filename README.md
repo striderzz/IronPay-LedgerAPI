@@ -194,6 +194,11 @@ No numbers yet. Each value is measured after Phase 5; raw output in docs/results
 - **Optimistic locking variant**: a version-column implementation behind a flag, benchmarked against `FOR UPDATE` with the same k6 scripts
 - **Fault injection**: opt-in fault toggles (slow queries, Redis outage) for incident drills
 
+## Docs
+
+- [INFO.md](INFO.md): high-level overview, system design (architecture, data model) and workflow diagrams.
+- [INTERVIEW.md](INTERVIEW.md): 30-second and 2-minute pitches, interview questions with answers, resume bullets.
+
 ## Related projects
 
 - [CloudShip DevOps](https://github.com/striderzz/CloudShip-DevOps): deploys IronPay to AWS
