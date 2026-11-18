@@ -1,0 +1,20 @@
+[project]
+name = "ironpay-ledgerapi"
+version = "0.1.0"
+description = "UPI-style payments API with a double-entry ledger in PostgreSQL"
+requires-python = ">=3.11"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Header", "fastapi.Query"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["integration: needs real PostgreSQL and Redis"]
+addopts = "-ra"
