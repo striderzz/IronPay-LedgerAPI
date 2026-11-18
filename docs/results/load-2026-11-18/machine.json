@@ -1,0 +1,8 @@
+{
+  "runner": "GitHub Actions ubuntu-latest",
+  "cpus": 4,
+  "mem": "15Gi",
+  "kernel": "7.0.0-1019-azure",
+  "api": "uvicorn, 4 workers",
+  "note": "API, PostgreSQL, Redis and k6 share this one machine"
+}

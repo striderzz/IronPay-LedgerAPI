@@ -2,7 +2,9 @@
 
 A small UPI-style payments API with a double-entry ledger, idempotent transfers and tests that try to double-spend it.
 
-Status: in development — design spec and build plan; results land as each phase ships.
+Status: core built (phases 1 to 6). CI runs 51 tests against real PostgreSQL and Redis; load-tested with k6 on GitHub Actions. Numbers below come from those runs.
+
+[![CI](https://github.com/striderzz/IronPay-LedgerAPI/actions/workflows/ci.yml/badge.svg)](https://github.com/striderzz/IronPay-LedgerAPI/actions/workflows/ci.yml)
 
 ![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white) ![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white) ![SQLAlchemy](https://img.shields.io/badge/SQLAlchemy-2-D71F00?logo=sqlalchemy&logoColor=white) ![Redis](https://img.shields.io/badge/Redis-DC382D?logo=redis&logoColor=white) ![Docker](https://img.shields.io/badge/Docker_Compose-2496ED?logo=docker&logoColor=white) ![pytest](https://img.shields.io/badge/pytest-0A9EDC?logo=pytest&logoColor=white) ![k6](https://img.shields.io/badge/k6-7D64FF?logo=k6&logoColor=white) ![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-2088FF?logo=githubactions&logoColor=white) ![License: MIT](https://img.shields.io/badge/License-MIT-yellow)
 
@@ -131,59 +133,70 @@ IronPay-LedgerAPI/
 
 ## Getting started
 
-Target workflow once Phase 1 lands.
-
-**Prerequisites:** Docker with Compose v2, Python 3.11 (for running tests outside Docker), k6 (for load tests), and `make` (on Windows, use Git Bash or run the `docker compose` commands in the Makefile directly).
+**Prerequisites:** Docker with Compose v2. For running tests outside Docker: Python 3.11+. Optional: k6 for local load tests, and `make` (on Windows, use Git Bash or run the `docker compose` commands from the Makefile directly).
 
 ```bash
 git clone https://github.com/striderzz/IronPay-LedgerAPI.git
 cd IronPay-LedgerAPI
-cp .env.example .env          # set JWT_SECRET; defaults work for local use
+cp .env.example .env          # set JWT_SECRET; the other defaults work locally
 
-make up                       # docker compose up --build: api, relay, postgres, redis
-make migrate                  # alembic upgrade head
-make seed                     # demo users and funded wallets
+make up                       # api (runs migrations on start), relay, postgres, redis
+make seed                     # demo users asha@example.com / riya@example.com with funded wallets
 ```
 
 Open http://localhost:8000/docs for the interactive API docs.
 
 ```bash
 make test                     # ruff + pytest (unit and integration) with coverage
-make load                     # k6 scenarios against the running stack
-make check-ledger             # ledger invariant check, prints drift
+make check-ledger             # ledger invariant check, exits 1 on any drift
+make events                   # last 10 events on the ironpay.events Redis Stream
 ```
 
-Example transfer:
+Log in and send a transfer (amounts are paise: 25000 = 250 rupees):
 
 ```bash
-curl -X POST http://localhost:8000/transfers \
+TOKEN=$(curl -s -X POST localhost:8000/auth/token -H "Content-Type: application/json" \
+  -d '{"email": "asha@example.com", "password": "demo-password-123"}' | jq -r .access_token)
+FROM=$(curl -s localhost:8000/accounts -H "Authorization: Bearer $TOKEN" | jq -r '.[0].id')
+
+curl -X POST localhost:8000/transfers \
   -H "Authorization: Bearer $TOKEN" \
-  -H "Idempotency-Key: 7d3c2a8e-1b9f-4c51-9a0e-2f6b8d4e5c11" \
+  -H "Idempotency-Key: $(uuidgen)" \
   -H "Content-Type: application/json" \
-  -d '{"from_account_id": "<uuid>", "to_handle": "riya@ironpay", "amount_minor": 25000, "note": "dinner"}'
+  -d "{\"from_account_id\": \"$FROM\", \"to_handle\": \"riya@ironpay\", \"amount_minor\": 25000, \"note\": \"dinner\"}"
 ```
+
+Sending the same request again with the same `Idempotency-Key` returns the first response with `Idempotent-Replayed: true` and moves no money.
+
+**Load tests:** the k6 scripts are in `loadtest/`. The `Load test` workflow (Actions tab, Run workflow) starts PostgreSQL, Redis, the API with 4 uvicorn workers and the relay on one runner, then runs a constant-rate test, a retry storm and a step test, and uploads the raw k6 output.
 
 ## Results
 
-No numbers yet. Each value is measured after Phase 5; raw output in docs/results/.
+Measured on 18 Nov 2026 in [this GitHub Actions run](https://github.com/striderzz/IronPay-LedgerAPI/actions/runs/44235971697): one `ubuntu-latest` runner (4 vCPU, 15 GiB) running the API (uvicorn, 4 workers), PostgreSQL 16, Redis 7 and k6 together, so k6 and the database compete with the API for the same CPUs. Raw output: [docs/results/load-2026-11-18/](docs/results/load-2026-11-18/). Latency on shared runners varies between runs: in an earlier run the same 100/s test had p95 16 ms and the API saturated at 200/s, so treat these as one honest sample, not a guarantee.
 
 | Metric | Value | How it is measured |
 |---|---|---|
-| p50 latency, `POST /transfers` | — | k6 `constant-arrival-rate` scenario at a fixed rate on the Docker Compose stack; hardware listed with the result |
-| p95 latency, `POST /transfers` | — | Same k6 run |
-| Max transfers/sec before errors | — | k6 `ramping-arrival-rate`; highest rate with error rate under 1% and p95 under the threshold |
-| Balance drift after N concurrent transfers | — | `scripts/check_ledger.py` after the double-spend test and after each k6 run; expected 0 |
-| Duplicate transfers under retry storm | — | k6 scenario that resends each request with the same Idempotency-Key; count of transfers vs unique keys; expected 0 |
-| Test coverage | — | `pytest --cov=app` in CI |
+| p50 latency, `POST /transfers` | 10.6 ms | k6 `constant-arrival-rate`, 100 transfers/s for 60 s (6,001 requests) between 200 funded wallets |
+| p95 latency, `POST /transfers` | 51.0 ms (p99 137.6 ms) | Same run; 0% errors |
+| Max transfers/sec before errors | 200 | Step test, 30 s per rate (100, 120 ... 200, 250): highest rate with achieved throughput at least 95% of target, errors under 1% and p95 under 500 ms. At 250/s throughput fell to 176/s and p95 rose to 2.1 s |
+| Balance drift after N concurrent transfers | 0 | `check_ledger` after the double-spend test (50 parallel transfers, exactly 10 succeed) and after all load runs (debits = credits) |
+| Duplicate transfers under retry storm | 0 | 1,201 logical transfers sent 5 times each with the same Idempotency-Key (6,005 requests, 3 sequential plus 2 parallel): 1,201 transfers created |
+| Test coverage | 97% | `pytest --cov=app` in CI: 51 tests, unit plus integration against real PostgreSQL and Redis ([output](docs/results/ci-tests-coverage.txt)) |
+
+## Screenshots
+
+| Swagger UI | CI run (tests, image build and push to GHCR) |
+|---|---|
+| ![Swagger UI](docs/screenshots/swagger-ui.png) | ![CI run](docs/screenshots/ci-run.png) |
 
 ## Roadmap
 
 - [x] Phase 1: scaffold (FastAPI app, config, PostgreSQL + Alembic, Docker Compose, health check, Prometheus `/metrics`, pytest, ruff, GitHub Actions CI)
 - [x] Phase 2: ledger core (users, accounts and handles, deposits, double-entry transfers with row locks, derived balances, entry history, double-spend test, invariant checker)
 - [x] Phase 3: API safety (JWT auth and ownership checks, Idempotency-Key on transfers and deposits, Redis rate limiting, problem details errors)
-- [ ] Phase 4: events and audit (outbox table, relay worker to Redis Stream, append-only audit log, JSON logs with request id)
-- [ ] Phase 5: load and results (k6 scenarios, invariant check after load, coverage, numbers in README from docs/results/)
-- [ ] Phase 6: polish (OpenAPI examples, screenshots, image push to GHCR on main, how-it-works notes in docs/)
+- [x] Phase 4: events and audit (outbox table, relay worker to Redis Stream, append-only audit log, JSON logs with request id)
+- [x] Phase 5: load and results (k6 scenarios, invariant check after load, coverage, numbers in README from docs/results/)
+- [x] Phase 6: polish (OpenAPI examples, screenshots, image push to GHCR on main, how-it-works notes in docs/)
 
 ## Stretch goals
 

@@ -1,0 +1,17 @@
+{
+  "ok": true,
+  "violations": {
+    "debits_equal_credits": 0,
+    "completed_transfer_entries": 0,
+    "rejected_transfer_has_entries": 0,
+    "negative_wallet_balance": 0
+  },
+  "totals": {
+    "completed": 41140,
+    "rejected": 0,
+    "entries": 82280,
+    "total_debits": 17198968218,
+    "total_credits": 17198968218,
+    "drift_minor": 0
+  }
+}

@@ -1,6 +1,6 @@
 # IronPay LedgerAPI: overview, system design and workflow
 
-Companion to [README.md](README.md). Pitches, interview questions and resume bullets are in [INTERVIEW.md](INTERVIEW.md). Everything here describes the design and the plan; where a number belongs it stays a placeholder until a real run fills it in `docs/results/`.
+Companion to [README.md](README.md). Pitches, interview questions and resume bullets are in [INTERVIEW.md](INTERVIEW.md). The core is built (phases 1 to 6); measured results are in the README and `docs/results/`.
 
 ---
 

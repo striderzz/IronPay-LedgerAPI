@@ -1,0 +1,157 @@
+{
+  "p95_limit_ms": 500.0,
+  "constant": {
+    "target_rps": 100,
+    "duration_s": 60,
+    "p50_ms": 10.58,
+    "p95_ms": 50.95,
+    "p99_ms": 137.63,
+    "error_rate": 0,
+    "achieved_rps": 100.0,
+    "requests": 6001,
+    "dropped_iterations": 0,
+    "checks_pass_rate": 1
+  },
+  "steps": [
+    {
+      "target_rps": 100,
+      "duration_s": 30,
+      "p50_ms": 10.6,
+      "p95_ms": 53.15,
+      "p99_ms": 142.11,
+      "error_rate": 0,
+      "achieved_rps": 100.0,
+      "requests": 3000,
+      "dropped_iterations": 0,
+      "checks_pass_rate": 1,
+      "ok": true
+    },
+    {
+      "target_rps": 120,
+      "duration_s": 30,
+      "p50_ms": 13.81,
+      "p95_ms": 119.79,
+      "p99_ms": 186.0,
+      "error_rate": 0,
+      "achieved_rps": 120.0,
+      "requests": 3601,
+      "dropped_iterations": 0,
+      "checks_pass_rate": 1,
+      "ok": true
+    },
+    {
+      "target_rps": 140,
+      "duration_s": 30,
+      "p50_ms": 13.01,
+      "p95_ms": 23.86,
+      "p99_ms": 98.74,
+      "error_rate": 0,
+      "achieved_rps": 140.0,
+      "requests": 4201,
+      "dropped_iterations": 0,
+      "checks_pass_rate": 1,
+      "ok": true
+    },
+    {
+      "target_rps": 160,
+      "duration_s": 30,
+      "p50_ms": 14.98,
+      "p95_ms": 95.29,
+      "p99_ms": 283.19,
+      "error_rate": 0,
+      "achieved_rps": 160.0,
+      "requests": 4801,
+      "dropped_iterations": 0,
+      "checks_pass_rate": 1,
+      "ok": true
+    },
+    {
+      "target_rps": 180,
+      "duration_s": 30,
+      "p50_ms": 14.07,
+      "p95_ms": 41.51,
+      "p99_ms": 79.59,
+      "error_rate": 0,
+      "achieved_rps": 180.0,
+      "requests": 5401,
+      "dropped_iterations": 0,
+      "checks_pass_rate": 1,
+      "ok": true
+    },
+    {
+      "target_rps": 200,
+      "duration_s": 30,
+      "p50_ms": 19.15,
+      "p95_ms": 82.93,
+      "p99_ms": 148.29,
+      "error_rate": 0,
+      "achieved_rps": 200.0,
+      "requests": 6000,
+      "dropped_iterations": 0,
+      "checks_pass_rate": 1,
+      "ok": true
+    },
+    {
+      "target_rps": 250,
+      "duration_s": 30,
+      "p50_ms": 930.29,
+      "p95_ms": 2115.35,
+      "p99_ms": 31259.87,
+      "error_rate": 0.0068,
+      "achieved_rps": 175.7,
+      "requests": 5270,
+      "dropped_iterations": 1474,
+      "checks_pass_rate": 0.9937,
+      "ok": false
+    }
+  ],
+  "max_ok_rps": 200,
+  "storm": {
+    "unique_keys": 1201,
+    "requests_sent": 6005,
+    "transfers_created": 1201,
+    "duplicate_transfers": 0
+  },
+  "ledger_after_constant": {
+    "ok": true,
+    "violations": {
+      "debits_equal_credits": 0,
+      "completed_transfer_entries": 0,
+      "rejected_transfer_has_entries": 0,
+      "negative_wallet_balance": 0
+    },
+    "totals": {
+      "completed": 6201,
+      "rejected": 0,
+      "entries": 12402,
+      "total_debits": 2030166905,
+      "total_credits": 2030166905,
+      "drift_minor": 0
+    }
+  },
+  "ledger_final": {
+    "ok": true,
+    "violations": {
+      "debits_equal_credits": 0,
+      "completed_transfer_entries": 0,
+      "rejected_transfer_has_entries": 0,
+      "negative_wallet_balance": 0
+    },
+    "totals": {
+      "completed": 41140,
+      "rejected": 0,
+      "entries": 82280,
+      "total_debits": 17198968218,
+      "total_credits": 17198968218,
+      "drift_minor": 0
+    }
+  },
+  "machine": {
+    "runner": "GitHub Actions ubuntu-latest",
+    "cpus": 4,
+    "mem": "15Gi",
+    "kernel": "7.0.0-1019-azure",
+    "api": "uvicorn, 4 workers",
+    "note": "API, PostgreSQL, Redis and k6 share this one machine"
+  }
+}

@@ -1,6 +1,6 @@
 # IronPay LedgerAPI: interview prep
 
-Companion to [README.md](README.md). Everything here describes the design and the plan. Where an answer needs a measured number, it says `[measured metric]` until a real run produces one. The overview, system design and workflow diagrams are in [INFO.md](INFO.md).
+Companion to [README.md](README.md). The core (phases 1 to 6) is built; numbers quoted here come from the runs saved in `docs/results/`. The overview, system design and workflow diagrams are in [INFO.md](INFO.md).
 
 ---
 
@@ -8,7 +8,7 @@ Companion to [README.md](README.md). Everything here describes the design and th
 
 ### 30-second pitch
 
-I built IronPay, a small UPI-style payments API in FastAPI and PostgreSQL. It focuses on the three things a payments core has to get right: money is never created or lost, because every transfer writes balanced debit and credit entries in a double-entry ledger; a payment is never applied twice, because transfers take an Idempotency-Key; and parallel requests cannot overdraw a wallet, because account rows are locked with SELECT FOR UPDATE. I prove it with a concurrent double-spend test, a ledger invariant checker and k6 load tests, all running in CI.
+I built IronPay, a small UPI-style payments API in FastAPI and PostgreSQL. It focuses on the three things a payments core has to get right: money is never created or lost, because every transfer writes balanced debit and credit entries in a double-entry ledger; a payment is never applied twice, because transfers take an Idempotency-Key; and parallel requests cannot overdraw a wallet, because account rows are locked with SELECT FOR UPDATE. I prove it with a concurrent double-spend test and a ledger invariant checker that run in CI against real Postgres and Redis, and with k6 load tests: on a 4-vCPU GitHub Actions runner it sustained 200 transfers a second, p95 was 51 ms at 100 a second, and a retry storm of 6,005 requests created zero duplicate transfers.
 
 ### 2-minute walkthrough
 
@@ -149,37 +149,37 @@ That is usually connection pool exhaustion: every worker thread is waiting for a
 Fill the blanks with real outcomes after each phase ships.
 
 **37. Tell me about a hard bug you found.**
-- Situation: while building the transfer endpoint, the first concurrency test showed `[measured result, e.g. how many transfers overspent]`.
-- Task: make concurrent transfers on one wallet safe without hurting latency too much.
-- Action: traced it to reading the balance before taking the lock, moved the lock first, added ordered locking, and kept the test in CI.
-- Result: `[measured metric: double-spend test passes, drift 0, p95 change]`.
+- Situation: the first CI run of the ledger tests failed 14 tests with a foreign key violation: ledger entries were being inserted before their transfer row.
+- Task: find why, without weakening the constraint.
+- Action: the models had foreign keys but no ORM `relationship()`, so SQLAlchemy's unit of work had no reason to order the two INSERTs. I flush the transfer row explicitly before adding its entries and left a comment explaining why. Running the integration tests against a real Postgres in CI is what caught it; a mocked database would not have.
+- Result: all 19 tests at that phase passed, including the 50-thread double-spend test (exactly 10 of 50 transfers succeed, drift 0).
 
 **38. Tell me about a trade-off you made.**
-- Situation: choosing between pessimistic and optimistic locking.
-- Task: pick one that is correct and that I can defend.
-- Action: chose `FOR UPDATE` with ordered locks, documented why, and planned an optimistic variant as a benchmark.
-- Result: `[measured metric: latency and throughput of the chosen approach]`.
+- Situation: choosing between pessimistic and optimistic locking for transfers.
+- Task: pick one that is correct under contention and that I can defend.
+- Action: chose `SELECT FOR UPDATE` taken in ascending id order, with the balance summed from entries while the lock is held; an optimistic variant stays a stretch-goal benchmark.
+- Result: the opposite-direction test (A to B and B to A in parallel) never deadlocks, and the load test held 200 transfers/s with p95 51 ms at 100/s on a shared 4-vCPU runner.
 
-**39. Tell me about cutting scope.**
-- Situation: the first design included Kafka, a fraud model, dbt and LLM features.
-- Task: ship a core I could explain line by line in about three weeks.
-- Action: kept the ledger, idempotency, locking, outbox and tests as core, moved Kafka, fraud scoring and analytics to stretch goals.
-- Result: `[what shipped and when, measured coverage]`.
+**39. Tell me about a measurement you got wrong at first.**
+- Situation: my first load-test summary said the API managed only half the target rate at every step.
+- Task: work out whether the API or the measurement was wrong.
+- Action: k6's built-in `rate` averages over the whole run, including the slow `setup()` that registers 200 users with Argon2. I recorded each scenario's own duration and computed throughput as requests divided by that. I also found that overloading at 300 to 800/s left a backlog that broke the next test, so the step test now stops at the first failing rate and cools down between steps.
+- Result: the corrected run showed 100/s with 0 errors and a max of 200/s, and the retry storm ran clean with 0 duplicates.
 
 **40. Tell me about learning something new quickly.**
 - Situation: I had used Postgres as a store but not its locking model.
 - Task: understand isolation levels and row locks well enough to prove correctness.
-- Action: read the Postgres docs on concurrency control, reproduced the race in a test before fixing it, and wrote a short note in `docs/`.
-- Result: `[measured metric or concrete outcome]`.
+- Action: read the Postgres docs on concurrency control, wrote the race as a test (50 threads behind a barrier, each on its own connection) and kept it in CI.
+- Result: the test passes on every push; the invariant checker reports 0 drift after every load run.
 
 ---
 
 ## Resume bullets
 
-Templates only. Replace each placeholder with a number from `docs/results/`.
+Numbers from `docs/results/` (load test: GitHub Actions run 44235971697, one 4-vCPU runner).
 
-- Built a UPI-style payments API in FastAPI and PostgreSQL with a double-entry ledger and idempotent transfers; sustained `[measured metric: transfers/sec]` at p95 `[measured metric: ms]` under k6 load with zero duplicate transfers across `[measured metric: retried requests]`
-- Prevented double-spends with ordered `SELECT FOR UPDATE` row locks, verified by a concurrent test of `[measured metric: N]` parallel transfers and a ledger invariant checker showing `[measured metric: drift]` drift after load
-- Added JWT auth, Redis token bucket rate limiting, a transactional outbox and an append-only audit log; `[measured metric: coverage]`% test coverage with pytest integration tests against real Postgres and Redis in GitHub Actions
+- Built a UPI-style payments API in **FastAPI** and **PostgreSQL** with a **double-entry ledger** and **idempotent transfers**, sustaining **200 transfers/sec** (p95 **51 ms** at 100/sec) under **k6** load with **0 duplicate transfers** across a **6,005-request** retry storm
+- Prevented double-spends with ordered **SELECT FOR UPDATE** row locks, verified by a **50-thread** concurrency test (exactly 10 of 50 transfers succeed) and a ledger invariant checker showing **0 drift** after load
+- Added **JWT** auth, a **Redis** Lua token bucket, a **transactional outbox** to Redis Streams and an append-only audit log; **97%** coverage from **51 pytest** tests against real Postgres and Redis in **GitHub Actions**
 
 ---
