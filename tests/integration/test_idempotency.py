@@ -96,7 +96,10 @@ def test_concurrent_requests_with_one_key_create_one_transfer(funded, session, m
     """20 identical requests race with the same key: one transfer, 20 identical answers."""
     from app.config import get_settings
 
-    monkeypatch.setattr(get_settings(), "transfer_burst", 100)  # isolate from rate limiting
+    # Isolate from rate limiting: the user's bucket already exists, so a bigger burst alone
+    # is not enough; a fast refill tops it up before the race starts.
+    monkeypatch.setattr(get_settings(), "transfer_burst", 100)
+    monkeypatch.setattr(get_settings(), "transfer_rate_per_sec", 10_000)
     asha, a = funded
     body = {"from_account_id": a, "to_handle": "riya@ironpay", "amount_minor": 500}
     barrier = threading.Barrier(20)

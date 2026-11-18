@@ -11,6 +11,8 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://ironpay:ironpay@localhost:5432/ironpay"
     redis_url: str = "redis://localhost:6379/0"
     log_level: str = "INFO"
+    db_pool_size: int = 10
+    db_max_overflow: int = 20
 
     # Auth. Set a long random JWT_SECRET in .env for anything beyond local use.
     jwt_secret: str = "dev-only-change-me"
