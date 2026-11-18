@@ -90,7 +90,7 @@ Unit tests cover pure logic (balance math, request hashing, token bucket refill)
 | Testing | pytest, pytest-cov, httpx | Fixtures for real Postgres and Redis, concurrent tests, coverage report |
 | Load testing | k6 | Arrival-rate scenarios and thresholds on p95 latency and error rate |
 | Packaging | Docker, Docker Compose | One command starts API, worker, Postgres and Redis |
-| Observability | prometheus-fastapi-instrumentator | `/metrics` for request rate, latency and errors; scraped by Prometheus in CloudShip and read by IncidentIQ |
+| Observability | prometheus-fastapi-instrumentator | `/metrics` for request rate, latency and errors; scraped by Prometheus in CloudShip |
 | Quality and CI | ruff, GitHub Actions | Lint and format checks, tests with service containers, image build |
 
 ## Project structure
@@ -215,7 +215,6 @@ Measured on 18 Nov 2026 in [this GitHub Actions run](https://github.com/striderz
 ## Related projects
 
 - [CloudShip DevOps](https://github.com/striderzz/CloudShip-DevOps): deploys IronPay to AWS
-- [IncidentIQ AgentOps](https://github.com/striderzz/IncidentIQ-AgentOps): investigates incidents injected into IronPay
 - [FraudSight MLOps](https://github.com/striderzz/FraudSight-MLOps): can score IronPay transfers for fraud (stretch goal)
 
 ## Author
