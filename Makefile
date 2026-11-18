@@ -1,4 +1,4 @@
-.PHONY: up down logs migrate lint fmt test
+.PHONY: up down logs migrate seed check-ledger lint fmt test
 
 up:            ## start api, postgres and redis
 	docker compose up --build -d
@@ -11,6 +11,12 @@ logs:
 
 migrate:       ## apply migrations inside the api container
 	docker compose exec api alembic upgrade head
+
+seed:          ## demo users and funded wallets
+	docker compose exec api python -m scripts.seed
+
+check-ledger:  ## ledger invariant check; exits 1 on drift
+	docker compose exec api python -m scripts.check_ledger
 
 lint:
 	ruff check . && ruff format --check .

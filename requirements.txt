@@ -7,3 +7,4 @@ psycopg[binary]==3.2.3
 alembic==1.14.0
 redis==5.2.1
 prometheus-fastapi-instrumentator==7.0.0
+pwdlib[argon2]==0.2.1
